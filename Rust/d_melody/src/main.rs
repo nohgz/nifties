@@ -11,7 +11,7 @@ fn main() {
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let stream = Sink::try_new(&stream_handle).unwrap();
 
-    let notes = build_note_buf(&create_file_name("travelers"), false, 1.0, -2);
+    let notes = build_note_buf(&create_file_name("travelers"), false, 1.65, 0);
     let _ = play_notes(&stream, notes.expect("REASON"));
 
     stream.sleep_until_end();
