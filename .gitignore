@@ -8,4 +8,7 @@
 /Rust/a_mozart/target
 /Rust/b_uno/target
 /Rust/c_hawaii/target
-/Rust/d_melody/
+/Rust/d_melody/target
+
+## Ignore Java Stuff that I don't really care about
+/Rust/d_melody/assets/melody-cs1
