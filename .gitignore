@@ -12,3 +12,6 @@
 
 ## Ignore Java Stuff that I don't really care about
 /Rust/d_melody/assets/melody-cs1
+
+## Ignore Cargo.lock
+*.lock

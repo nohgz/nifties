@@ -74,7 +74,7 @@ fn file_average_sentiment(average_scores: &HashMap<String, (usize, f64)>, words_
             println!("The overall sentiment of {} is negative, with an average score of {:.2}.", words_path, overall_avg_score)
         }
     } else {
-        println!("FUCK!");
+        println!("An overall sentiment cannot be estimated for this line of text.");
     }
 
     Ok(())
