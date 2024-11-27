@@ -6,7 +6,7 @@
 
 ## Ignore build folders
 /Rust/a_mozart/target
-/Rust/b_uno/target
+/Rust/b_movie/target
 /Rust/c_hawaii/target
 /Rust/d_melody/target
 
