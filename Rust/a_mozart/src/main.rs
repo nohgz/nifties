@@ -13,7 +13,7 @@ use std::env;
 //
 // Usage:
 // Run with the instrument name as an argument. Example:
-//   cargo run --release violin
+//   cargo run violin
 //
 // Dependencies: rodio, rand
 // -----------------------------------------------------------------------------

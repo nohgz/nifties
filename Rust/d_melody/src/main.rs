@@ -1,20 +1,75 @@
 use std::fs::File;
-use std::io;
-use std::io::BufReader;
-use std::io::BufRead;
+use std::io::{self, BufReader, BufRead, Write};
+use std::collections::HashMap;
 use std::time::Duration;
-use rodio::{Decoder, OutputStream, Sink};
+
+use rodio::{OutputStream, Sink};
 use rodio::source::{SineWave, Source};
 
-fn main() {
+// -----------------------------------------------------------------------------
+// Melody
+//
+// Description:
+// Rust implementation of Stanford Nifty Assignment "Melody"
+// http://nifty.stanford.edu/2015/obourn-stepp-melody-maker/
+//
+// Note that only the methods were implemented as the assignment
+// requested, because I didn't feel like implementing the GUI.
+// Main implements a primitive system that plays a song as requested.
+//
+// Usage:
+// Run with cargo, no args necessary
+//   cargo run
+//
+// Dependencies: rodio
+// -----------------------------------------------------------------------------
+
+fn main() -> io::Result<()> {
     // _stream must live as long as the sink
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let stream = Sink::try_new(&stream_handle).unwrap();
 
-    let notes = build_note_buf(&create_file_name("travelers"), false, 1.65, 0);
-    let _ = play_notes(&stream, notes.expect("REASON"));
+    // create a map of available songs
+    let song_map: HashMap<&str, &str> = HashMap::from([
+        ("travelers", "travelers"),
+        ("twinkle", "twinkle"),
+        ("birthday", "birthday"),
+        ("levels", "levels"),
+        ("tetris", "tetris"),
+        ("zombie", "zombie"),
+    ]);
 
-    stream.sleep_until_end();
+    loop {
+        println!("Available songs: {}", song_map.keys().cloned().collect::<Vec<_>>().join(", "));
+        print!("Enter a song name to play (or 'exit' to quit): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let song_name = input.trim().to_lowercase();
+
+        if song_name == "exit" {
+            return Ok(());
+        }
+
+        // Check if the song exists in the map
+        if let Some(file_key) = song_map.get(song_name.as_str()) {
+            let file_path = create_file_name(file_key);
+
+            // Load the selected song buffer
+            match build_note_buf(&file_path) {
+                Ok(note_buf) => {
+                    // Play the song
+                    if let Err(e) = play_notes(&stream, note_buf) {
+                        eprintln!("Error playing notes: {}", e);
+                    }
+                }
+                Err(e) => eprintln!("Failed to load song: {}", e),
+            }
+        } else {
+            println!("Song not found. Please choose from the available options.");
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -55,7 +110,7 @@ fn play_notes(stream: &Sink, note_buf: Vec<Note>) -> io::Result<()> {
             }
         }
 
-        // Added the second condition so that head and tail notes don't count twice.
+        // Added the second condition so that head and tail notes don't count twice
         if replay_mode && !note.repeat {
             // When in replay mode, push the note into a buffer for later playing
             replay_buf.push(note.clone());
@@ -65,27 +120,23 @@ fn play_notes(stream: &Sink, note_buf: Vec<Note>) -> io::Result<()> {
     Ok(())
 }
 
-fn build_note_buf(filepath: &str, reverse: bool, tempo_mod: f32, octave_mod: i32) -> io::Result<Vec<Note>> {
+fn build_note_buf(filepath: &str) -> io::Result<Vec<Note>> {
     let file = File::open(filepath)?;
     let reader = BufReader::new(file);
-    let mut octave_max = 1;
-    let mut octave_min = 10;
     let mut note_buf: Vec<Note> = Vec::new();
 
     // Create Notes Array
     for line in reader.lines() {
-        let mut note = note_from_str(&line?);
-
-        // Get the highest and lowest octaves
-        if note.octave > octave_max {
-            octave_max = note.octave;
-        }
-        if note.octave < octave_min {
-            octave_min = note.octave;
-        }
-
+        let note = note_from_str(&line?);
         note_buf.push(note);
     }
+
+    Ok(note_buf)
+}
+
+fn modify_note_buf(note_buf: &mut Vec<Note>, reverse: bool, tempo_mod: f32, octave_mod: i32) -> io::Result<()> {
+    let octave_max = note_buf.iter().map(|note| note.octave).max().unwrap_or(1);
+    let octave_min = note_buf.iter().map(|note| note.octave).min().unwrap_or(10);
 
     // Modify the octaves and tempos
     for note in note_buf.iter_mut() {
@@ -103,7 +154,7 @@ fn build_note_buf(filepath: &str, reverse: bool, tempo_mod: f32, octave_mod: i32
         // Handle negative octave shift
         if octave_min + octave_mod > 1 && octave_mod < 0 {
             note.octave += octave_mod;
-         } else if octave_mod < 0 {
+        } else if octave_mod < 0 {
             // if octave mod is too small, then decrease as much as possible
             note.octave += 1 - octave_min;
         }
@@ -114,13 +165,7 @@ fn build_note_buf(filepath: &str, reverse: bool, tempo_mod: f32, octave_mod: i32
         note_buf.reverse();
     }
 
-    Ok(note_buf)
-}
-
-
-fn print_note(note: Note) {
-    println!("DURATION: {} , PITCH: {}, OCTAVE: {}, ACCIDENTAL: {}, REPEAT: {}",
-            note.duration, note.pitch, note.octave, note.accidental, note.repeat);
+    Ok(())
 }
 
 fn note_from_str(input: &str) -> Note {
@@ -166,7 +211,7 @@ fn pitch_to_semitones(pitch: char) -> i32 {
         'G' => 7,
         'A' => 9,
         'B' => 11,
-        _   => -69420 // invalid pitch.
+        _   => -69420 // invalid pitch haha funny number
     }
 }
 
