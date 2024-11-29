@@ -12,6 +12,8 @@ use std::io::Write;
 // http://nifty.stanford.edu/2016/manley-urness-movie-review-sentiment/
 //
 // Uses a hashmap to score and index word sentiments for speeeed
+// I also didn't need to implement the whole menu thing for full credit,
+// only needed the wordFinder functionality.
 //
 // Usage:
 // Run with cargo, no args necessary
