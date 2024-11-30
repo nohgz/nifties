@@ -1,5 +1,11 @@
 {
     "cSpell.words": [
         "datagen"
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./Rust/a_mozart/Cargo.toml",
+        "./Rust/b_movie/Cargo.toml",
+        "./Rust/c_hawaii/Cargo.toml",
+        "./Rust/d_melody/Cargo.toml"
     ]
 }

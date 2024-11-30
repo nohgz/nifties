@@ -12,8 +12,6 @@ use std::io::Write;
 // http://nifty.stanford.edu/2016/manley-urness-movie-review-sentiment/
 //
 // Uses a hashmap to score and index word sentiments for speeeed
-// I also didn't need to implement the whole menu thing for full credit,
-// only needed the wordFinder functionality.
 //
 // Usage:
 // Run with cargo, no args necessary
@@ -216,17 +214,17 @@ fn file_print_sentiment(word_map: &HashMap<String, (usize, f64)>, words_path: &s
         }
     }
 
-    let mut positive_file = File::create("positivewords.txt")?;
+    let mut positive_file = File::create("positive.txt")?;
     for word in positive_words {
         writeln!(positive_file, "{}", word)?;
     }
 
-    let mut negative_file = File::create("negativewords.txt")?;
+    let mut negative_file = File::create("negative.txt")?;
     for word in negative_words {
         writeln!(negative_file, "{}", word)?;
     }
 
-    println!("Positive words saved to 'positivewords.txt', negative words saved to 'negativewords.txt'.");
+    println!("Positive words saved to 'positive.txt', negative words saved to 'negative.txt'.");
 
     Ok(())
 }
