@@ -13,9 +13,8 @@ use rodio::source::{SineWave, Source};
 // Rust implementation of Stanford Nifty Assignment "Melody"
 // http://nifty.stanford.edu/2015/obourn-stepp-melody-maker/
 //
-// Note that only the methods were implemented as the assignment
-// requested, because I didn't feel like implementing the GUI.
 // Main implements a primitive system that plays a song as requested.
+// I didn't want to mess around egui.
 //
 // Usage:
 // Run with cargo, no args necessary
@@ -25,11 +24,12 @@ use rodio::source::{SineWave, Source};
 // -----------------------------------------------------------------------------
 
 fn main() -> io::Result<()> {
-    // _stream must live as long as the sink
+    // Initialize audio stream
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    let stream = Sink::try_new(&stream_handle).unwrap();
+    #[allow(unused_assignments)]
+    let mut stream = Sink::try_new(&stream_handle).unwrap();
 
-    // create a map of available songs
+    // Create a map of available songs
     let song_map: HashMap<&str, &str> = HashMap::from([
         ("travelers", "travelers"),
         ("twinkle", "twinkle"),
@@ -39,38 +39,89 @@ fn main() -> io::Result<()> {
         ("zombie", "zombie"),
     ]);
 
+    let mut current_song: Option<Vec<Note>> = None;
+    let mut current_song_name = String::new();
+    let mut reverse = false;
+    let mut tempo_mod = 1.0;
+    let mut octave_mod = 0;
+
     loop {
-        println!("Available songs: {}", song_map.keys().cloned().collect::<Vec<_>>().join(", "));
-        print!("Enter a song name to play (or 'exit' to quit): ");
+        print_banner(&current_song_name, reverse, octave_mod, tempo_mod);
+
+        print!("Enter your choice: ");
         io::stdout().flush()?;
 
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        let song_name = input.trim().to_lowercase();
+        let choice = input.trim();
 
-        if song_name == "exit" {
-            return Ok(());
-        }
+        match choice {
+            "A" => {
+                // List available songs and let the user select one
+                println!("Available songs: {}", song_map.keys().cloned().collect::<Vec<_>>().join(", "));
+                print!("Enter song name: ");
+                io::stdout().flush()?;
 
-        // Check if the song exists in the map
-        if let Some(file_key) = song_map.get(song_name.as_str()) {
-            let file_path = create_file_name(file_key);
+                let mut song_input = String::new();
+                io::stdin().read_line(&mut song_input)?;
+                let song_name = song_input.trim().to_lowercase();
 
-            // Load the selected song buffer
-            match build_note_buf(&file_path) {
-                Ok(note_buf) => {
-                    // Play the song
-                    if let Err(e) = play_notes(&stream, note_buf) {
-                        eprintln!("Error playing notes: {}", e);
+                if let Some(file_key) = song_map.get(song_name.as_str()) {
+                    match build_note_buf(&create_file_name(file_key)) {
+                        Ok(note_buf) => {
+                            current_song = Some(note_buf);
+                            current_song_name = song_name.clone();
+                            println!("Selected song: {}", song_name);
+                        }
+                        Err(e) => println!("Failed to load song: {}", e),
                     }
+                } else {
+                    println!("Song not found.");
                 }
-                Err(e) => eprintln!("Failed to load song: {}", e),
             }
-        } else {
-            println!("Song not found. Please choose from the available options.");
+            "S" => {
+                // Play the current song
+                if let Some(note_buf) = &current_song {
+                    println!("Playing song: {}", current_song_name);
+                    stream = Sink::try_new(&stream_handle).unwrap(); // Reset the stream
+                    if let Err(e) = play_notes(&stream, note_buf.clone(), reverse, tempo_mod, octave_mod) {
+                        eprintln!("Error playing song: {}", e);
+                    }
+                } else {
+                    println!("No song selected.");
+                }
+            }
+            "D" => {
+                // Toggle reverse playback
+                reverse = !reverse;
+                println!("Reverse playback: {}", reverse);
+            }
+            "C" => {
+                // Increase octave
+                octave_mod += 1;
+            }
+            "Z" => {
+                // Decrease octave
+                octave_mod -= 1;
+            }
+            "E" => {
+                // Increase tempo
+                tempo_mod += 0.25;
+            }
+            "Q" => {
+                // Decrease tempo
+                tempo_mod -= 0.25;
+            }
+            "X" => {
+                // Exit the program
+                println!("Goodbye!");
+                return Ok(());
+            }
+            _ => println!("Invalid choice, please try again."),
         }
     }
 }
+
 
 #[derive(Clone)]
 struct Note {
@@ -81,19 +132,64 @@ struct Note {
     repeat: bool
 }
 
+fn print_banner(songname: &str, reverse: bool, octave_mod: i32, tempo_mod: f32) {
+    // Evil print that clears the terminal
+    print!("\x1B[2J\x1B[H");
+
+    println!("---------------------------------------------------------");
+    println!("-                  Rust Melody Jukebox                  -");
+    println!("---------------------------------------------------------");
+    println!("- NOW PLAYING: {:<40} -", songname);
+    println!("- SPEED: {:>6.2}x             PITCH: {:<+4}                -", tempo_mod, octave_mod);
+    println!("- REVERSE? {:<44} -", if reverse { "ENABLED" } else { "DISABLED" });
+    println!("---------------------------------------------------------");
+    println!("-                        Controls                       -");
+    println!("---------------------------------------------------------");
+    println!("- (A) Select Song   (S) Start Song   (D) Reverse Song   -");
+    println!("---------------------------------------------------------");
+    println!("-   (Z) Decrease Octave           (C) Increase Octave   -");
+    println!("-   (Q) Decrease Tempo            (E) Increase Tempo    -");
+    println!("-                        (X) Exit                       -");
+    println!("---------------------------------------------------------");
+}
+
+
 fn create_file_name(songname: &str) -> String {
     format!("assets/songtxts/{}.txt", songname)
 }
 
-fn play_notes(stream: &Sink, note_buf: Vec<Note>) -> io::Result<()> {
+fn play_notes(stream: &Sink, note_buf: Vec<Note>, reverse: bool,
+                tempo_mod: f32, octave_mod: i32,) -> io::Result<()> {
+    // define sep buffer for notes that are in replay sections
     let mut replay_buf: Vec<Note> = Vec::new();
     let mut replay_mode = false;
 
-    for note in note_buf {
+    // Create a modifiable iterator over notes
+    let mut notes = note_buf.into_iter();
+
+    // reverse if needed
+    if reverse {
+        notes = notes.rev().collect::<Vec<_>>().into_iter();
+    }
+
+    for mut note in notes {
+        // Apply tempo modification
+        note.duration /= tempo_mod;
+
+
+        // Apply octave modification
+        note.octave = match note.octave.checked_add(octave_mod) {
+            Some(new_octave) if new_octave >= 1 && new_octave <= 9 => new_octave,
+            Some(new_octave) if new_octave > 9 => 9, // Clamp to max
+            Some(new_octave) if new_octave < 1 => 1, // Clamp to min
+            _ => note.octave,                       // Fallback to current octave
+        };
+
+        // Play the modified note
         play_note(&stream, note.clone());
 
         /*
-         * Stupid ass replay hack
+         * Evil ass replay hack
          */
 
         // If the note is marked with repeat, toggle replay mode and push that note
@@ -116,9 +212,9 @@ fn play_notes(stream: &Sink, note_buf: Vec<Note>) -> io::Result<()> {
             replay_buf.push(note.clone());
         }
     }
-
     Ok(())
 }
+
 
 fn build_note_buf(filepath: &str) -> io::Result<Vec<Note>> {
     let file = File::open(filepath)?;
@@ -132,40 +228,6 @@ fn build_note_buf(filepath: &str) -> io::Result<Vec<Note>> {
     }
 
     Ok(note_buf)
-}
-
-fn modify_note_buf(note_buf: &mut Vec<Note>, reverse: bool, tempo_mod: f32, octave_mod: i32) -> io::Result<()> {
-    let octave_max = note_buf.iter().map(|note| note.octave).max().unwrap_or(1);
-    let octave_min = note_buf.iter().map(|note| note.octave).min().unwrap_or(10);
-
-    // Modify the octaves and tempos
-    for note in note_buf.iter_mut() {
-        // Modify tempo
-        note.duration /= tempo_mod;
-
-        // Handle positive octave shift
-        if octave_max + octave_mod < 10 && octave_mod > 0 {
-            note.octave += octave_mod;
-        } else if octave_mod > 0 {
-            // if octave mod is too big, then increase as much as possible
-            note.octave += 9 - octave_max;
-        }
-
-        // Handle negative octave shift
-        if octave_min + octave_mod > 1 && octave_mod < 0 {
-            note.octave += octave_mod;
-        } else if octave_mod < 0 {
-            // if octave mod is too small, then decrease as much as possible
-            note.octave += 1 - octave_min;
-        }
-    }
-
-    // If user asks for it, reverse the order
-    if reverse {
-        note_buf.reverse();
-    }
-
-    Ok(())
 }
 
 fn note_from_str(input: &str) -> Note {

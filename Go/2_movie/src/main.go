@@ -260,5 +260,4 @@ func writeExtremeSentiments(wordMap map[string]Score, filePath string) {
 			fmt.Fprintln(negFile, line)
 		}
 	}
-
 }
